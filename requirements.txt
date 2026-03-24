@@ -1,0 +1,13 @@
+flask
+pandas
+numpy
+scikit-learn
+xgboost
+joblib
+sqlalchemy
+mysql-connector-python
+matplotlib
+seaborn
+plotly
+dash
+streamlit
