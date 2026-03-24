@@ -4,6 +4,8 @@ import requests
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from src.predictor import load_best_model, predict
+
 st.title("AI-Driven Disease Outbreak Prediction (Ghana)")
 
 st.sidebar.header("Input Parameters")
@@ -15,6 +17,17 @@ humidity = st.sidebar.slider("Humidity (%)", 30.0, 90.0, 70.0)
 sanitation = st.sidebar.slider("Sanitation Score", 0.0, 1.0, 0.8)
 population_density = st.sidebar.slider("Population Density", 100, 1000, 500)
 previous_cases = st.sidebar.slider("Previous Cases", 0, 100, 40)
+
+API_URL = st.secrets.get("API_URL", "")
+use_api = bool(API_URL)
+model = None
+
+if not use_api:
+    try:
+        model = load_best_model()
+    except Exception as err:
+        st.warning(f"Local model not loaded ({err}); switching to API mode if `API_URL` is configured.")
+        model = None
 
 if st.sidebar.button("Predict Outbreak Risk"):
     payload = {
@@ -29,8 +42,15 @@ if st.sidebar.button("Predict Outbreak Risk"):
     }
 
     try:
-        response = requests.post("http://localhost:5000/predict", json=payload)
-        result = response.json()["predictions"][0]
+        if use_api or model is None:
+            # If URL given, call remote endpoint; otherwise fallback to local call
+            endpoint = API_URL.rstrip("/") + "/predict" if API_URL else "http://localhost:5000/predict"
+            response = requests.post(endpoint, json=payload, timeout=10)
+            response.raise_for_status()
+            result = response.json()["predictions"][0]
+        else:
+            predictions = predict(model, payload)
+            result = predictions[0]
 
         st.header("Prediction Results")
         risk_level = "High Risk" if result["prediction"] == 1 else "Low Risk"
@@ -47,7 +67,9 @@ if st.sidebar.button("Predict Outbreak Risk"):
         st.pyplot(fig)
 
     except Exception as e:
-        st.error(f"Error connecting to API: {e}")
+        st.error(f"Prediction error: {e}")
+        if not use_api and model is None:
+            st.info("If you are deploying to Streamlit Cloud at ai-diseaseoutbreakprediction.streamlit.app, set `API_URL` in secrets to your endpoint or include model artifacts in /models.")
 
 st.header("About")
 st.write("""
